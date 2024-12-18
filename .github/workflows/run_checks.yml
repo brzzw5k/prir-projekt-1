@@ -14,7 +14,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get install -y python3-pip
-          pip3 install pre-commit pytest
+          pip3 install -r requirements.txt
 
       - name: Run pre-commit checks
         run: pre-commit run --all-files
