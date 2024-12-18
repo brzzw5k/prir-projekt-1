@@ -1,7 +1,8 @@
 # Zadanie 11. Faktoryzacja Doolitle’a
-Elementy macierzy dolnej lewostronnej $L$ i górnej prawostronnej $U$ takich że $A = L \times U$ są obliczane w nastepujący sposób $k$ - numer iteracji:
+Elementy macierzy dolnej lewostronnej $L$ i górnej prawostronnej $U$ takich że $A = L \times U$ są obliczane w nastepujący sposób:
+##
+$k$ - numer iteracji
 $${u_{kj}} = {a_{kj}} - \sum_{m=1}^{k-1} {l_{km}}{u_{mj}}, j = k, k+1, ..., n$$
-
 $${l_{ik}} = \frac{{a_{ik}} - \sum_{m=1}^{k-1} {l_{im}}{u_{mk}}}{u_{kk}}, i = k+1, ..., n$$
 
 Macierz A wygenerować losowo.
