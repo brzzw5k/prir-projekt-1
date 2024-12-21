@@ -1,5 +1,5 @@
 import numpy as np
-
+from joblib import Parallel, delayed
 
 class DoolittleFactorization:
     """
@@ -7,7 +7,7 @@ class DoolittleFactorization:
     a lower triangular matrix L and an upper triangular matrix U
     such that A = LU.
 
-    Parameters:
+    Parameters:delayed
         A: A square matrix of shape (n, n)
 
     Attributes:
@@ -45,5 +45,17 @@ class DoolittleFactorization:
         return df.L, df.U
 
     @staticmethod
-    def parallel(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        pass
+    def parallel(A: np.ndarray, n_jobs: int = -1) -> tuple[np.ndarray, np.ndarray]:
+        df = DoolittleFactorization(A)
+
+        for k in range(df.n):
+            Parallel(n_jobs=n_jobs)(
+                delayed(df._compute_U)(k, j)
+                for j in range(k, df.n)
+            )
+            Parallel(n_jobs=n_jobs)(
+                delayed(df._compute_L)(k, i)
+                for i in range(k + 1, df.n)
+            )
+
+        return df.L, df.U
