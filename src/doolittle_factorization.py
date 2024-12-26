@@ -1,7 +1,6 @@
 import numpy as np
 from joblib import Parallel, delayed
 
-
 class DoolittleFactorization:
     """
     Doolittle's factorization of a square matrix A into
@@ -53,9 +52,11 @@ class DoolittleFactorization:
         n = df.n
         for k in range(n):
             Parallel(n_jobs=n_jobs)(
-                delayed(df._compute_U_element)(k, j) for j in range(k, n)
+                delayed(df._compute_U_element)(k, j)
+                for j in range(k, n)
             )
             Parallel(n_jobs=n_jobs)(
-                delayed(df._compute_L_element)(k, i) for i in range(k + 1, n)
+                delayed(df._compute_L_element)(k, i)
+                for i in range(k + 1, n)
             )
         return df.L, df.U
