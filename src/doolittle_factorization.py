@@ -38,10 +38,8 @@ class DoolittleFactorization:
         df = DoolittleFactorization(A)
         n = df.n
         for k in range(n):
-            # Obliczenie k-tego wiersza macierzy U
             for j in range(k, n):
                 df._compute_U_element(k, j)
-            # Obliczenie k-tej kolumny macierzy L
             for i in range(k + 1, n):
                 df._compute_L_element(k, i)
         return df.L, df.U
@@ -54,11 +52,9 @@ class DoolittleFactorization:
         df = DoolittleFactorization(A)
         n = df.n
         for k in range(n):
-            # Równoległe obliczenie k-tego wiersza macierzy U
             Parallel(n_jobs=n_jobs)(
                 delayed(df._compute_U_element)(k, j) for j in range(k, n)
             )
-            # Równoległe obliczenie k-tej kolumny macierzy L
             Parallel(n_jobs=n_jobs)(
                 delayed(df._compute_L_element)(k, i) for i in range(k + 1, n)
             )
