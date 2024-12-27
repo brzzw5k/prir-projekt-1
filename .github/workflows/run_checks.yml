@@ -17,7 +17,13 @@ jobs:
           pip3 install -r requirements.txt
 
       - name: Run pre-commit checks
-        run: pre-commit run --all-files
+        run: |
+          pre-commit run --all-files
 
       - name: Run unit tests
-        run: pytest
+        run: |
+          pytest
+
+      - name: Run performance benchmarks
+        run: |
+          pytest test_performance_doolittle.py --benchmark-only
