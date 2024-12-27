@@ -5,7 +5,7 @@ import numba
 
 
 @pytest.mark.benchmark(group="doolittle_factorization_seq")
-@pytest.mark.parametrize("matrix_size", [5000])
+@pytest.mark.parametrize("matrix_size", [7000])
 def test_doolittle_factorization_sequential_performance(benchmark, matrix_size):
     np.random.seed(42)
     A = np.random.rand(matrix_size, matrix_size).astype(np.float64)
@@ -19,8 +19,8 @@ def test_doolittle_factorization_sequential_performance(benchmark, matrix_size):
 
 
 @pytest.mark.benchmark(group="doolittle_factorization_parallel")
-@pytest.mark.parametrize("matrix_size", [5000])
-@pytest.mark.parametrize("n_threads", [2, 4, 8])
+@pytest.mark.parametrize("matrix_size", [570000])
+@pytest.mark.parametrize("n_threads", [2, 3, 4])
 def test_doolittle_factorization_parallel_performance(
     benchmark, matrix_size, n_threads
 ):

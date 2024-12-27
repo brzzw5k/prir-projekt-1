@@ -26,4 +26,10 @@ jobs:
 
       - name: Run performance benchmarks
         run: |
-          pytest test_performance_doolittle.py --benchmark-only
+          pytest test_performance_doolittle.py --benchmark-only --benchmark-json=wyniki_benchmark.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: wyniki_benchmark.json
