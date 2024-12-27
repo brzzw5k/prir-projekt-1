@@ -1,5 +1,5 @@
 import numpy as np
-from joblib import Parallel, delayed
+from numba import njit, prange
 
 
 class DoolittleFactorization:
@@ -10,52 +10,85 @@ class DoolittleFactorization:
     """
 
     def __init__(self, A: np.ndarray) -> None:
-        self.A = A
+        if A.shape[0] != A.shape[1]:
+            raise ValueError("Matrix must be square.")
+        self.A = A.copy()
         self.n = A.shape[0]
-        self.U = np.zeros((self.n, self.n), dtype=A.dtype)
         self.L = np.eye(self.n, dtype=A.dtype)
-
-    def _compute_U_element(self, k: int, j: int) -> None:
-        """
-        U[k,j].
-        """
-        tmp = self.A[k, j]
-        for m in range(k):
-            tmp -= self.L[k, m] * self.U[m, j]
-        self.U[k, j] = tmp
-
-    def _compute_L_element(self, k: int, i: int) -> None:
-        """
-        L[i,k].
-        """
-        tmp = self.A[i, k]
-        for m in range(k):
-            tmp -= self.L[i, m] * self.U[m, k]
-        self.L[i, k] = tmp / self.U[k, k]
+        self.U = np.zeros((self.n, self.n), dtype=A.dtype)
 
     @staticmethod
     def sequential(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        df = DoolittleFactorization(A)
-        n = df.n
-        for k in range(n):
-            for j in range(k, n):
-                df._compute_U_element(k, j)
-            for i in range(k + 1, n):
-                df._compute_L_element(k, i)
-        return df.L, df.U
+        """
+        Perform LU factorization sequentially using Numba.
+        Returns lower and upper triangular matrices L and U.
+        """
+        L, U = lu_doolittle_numba(A)
+        return L, U
 
     @staticmethod
-    def parallel(A: np.ndarray, n_jobs: int = -1) -> tuple[np.ndarray, np.ndarray]:
+    def parallel(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
-        Parallel method on rows and colls
+        Perform LU factorization using Numba with parallelization.
+        Only the computation of L[i, k] is parallelized to maintain correctness.
+        Returns lower and upper triangular matrices L and U.
         """
-        df = DoolittleFactorization(A)
-        n = df.n
-        for k in range(n):
-            Parallel(n_jobs=n_jobs)(
-                delayed(df._compute_U_element)(k, j) for j in range(k, n)
-            )
-            Parallel(n_jobs=n_jobs)(
-                delayed(df._compute_L_element)(k, i) for i in range(k + 1, n)
-            )
-        return df.L, df.U
+        L, U = lu_doolittle_numba_parallel_corrected(A)
+        return L, U
+
+
+@njit(fastmath=True, cache=True)
+def lu_doolittle_numba(A):
+    """
+    Perform Doolittle's LU factorization with Numba optimization (sequential).
+    Returns lower and upper triangular matrices L and U.
+    """
+    n = A.shape[0]
+    L = np.eye(n, dtype=A.dtype)
+    U = np.zeros((n, n), dtype=A.dtype)
+
+    for k in range(n):
+        # Compute U[k, j] for j = k to n-1
+        for j in range(k, n):
+            sum_ = 0.0
+            for m in range(k):
+                sum_ += L[k, m] * U[m, j]
+            U[k, j] = A[k, j] - sum_
+
+        # Compute L[i, k] for i = k+1 to n-1
+        for i in range(k + 1, n):
+            sum_ = 0.0
+            for m in range(k):
+                sum_ += L[i, m] * U[m, k]
+            L[i, k] = (A[i, k] - sum_) / U[k, k]
+
+    return L, U
+
+
+@njit(parallel=True, fastmath=True, cache=True)
+def lu_doolittle_numba_parallel_corrected(A):
+    """
+    Perform Doolittle's LU factorization with Numba's parallelization.
+    Only the computation of L[i, k] is parallelized to maintain correctness.
+    Returns lower and upper triangular matrices L and U.
+    """
+    n = A.shape[0]
+    L = np.eye(n, dtype=A.dtype)
+    U = np.zeros((n, n), dtype=A.dtype)
+
+    for k in range(n):
+        # Compute U[k, j] sequentially
+        for j in range(k, n):
+            sum_ = 0.0
+            for m in range(k):
+                sum_ += L[k, m] * U[m, j]
+            U[k, j] = A[k, j] - sum_
+
+        # Parallelize the computation of L[i, k] for i = k+1 to n-1
+        for i in prange(k + 1, n):
+            sum_ = 0.0
+            for m in range(k):
+                sum_ += L[i, m] * U[m, k]
+            L[i, k] = (A[i, k] - sum_) / U[k, k]
+
+    return L, U
