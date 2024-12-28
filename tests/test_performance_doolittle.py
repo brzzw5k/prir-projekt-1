@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pytest
 from src.doolittle_factorization import DoolittleFactorization
@@ -5,7 +6,7 @@ import numba
 
 
 @pytest.mark.benchmark(group="doolittle_factorization_seq")
-@pytest.mark.parametrize("matrix_size", [7000])
+@pytest.mark.parametrize("matrix_size", [4000])
 def test_doolittle_factorization_sequential_performance(benchmark, matrix_size):
     np.random.seed(42)
     A = np.random.rand(matrix_size, matrix_size).astype(np.float64)
@@ -18,7 +19,24 @@ def test_doolittle_factorization_sequential_performance(benchmark, matrix_size):
 
 @pytest.mark.benchmark(group="doolittle_factorization_parallel")
 @pytest.mark.parametrize("matrix_size", [7000])
-@pytest.mark.parametrize("n_threads", [2, 4, 8, 16])
+@pytest.mark.parametrize("n_threads", [2, 3, 4])
+def test_doolittle_factorization_parallel_performance(
+    benchmark, matrix_size, n_threads
+):
+    np.random.seed(42)
+    A = np.random.rand(matrix_size, matrix_size).astype(np.float64)
+
+    numba.set_num_threads(n_threads)
+
+    def doolittle_parallel():
+        return DoolittleFactorization.parallel(A)
+
+    benchmark(doolittle_parallel)
+
+@pytest.mark.skip(reason="Skipping parallel performance test on CI")
+@pytest.mark.benchmark(group="doolittle_factorization_parallel")
+@pytest.mark.parametrize("matrix_size", [7000])
+@pytest.mark.parametrize("n_threads", [2, 4, 6, 8, 10, 12, 14, 16])
 def test_doolittle_factorization_parallel_performance(
     benchmark, matrix_size, n_threads
 ):
