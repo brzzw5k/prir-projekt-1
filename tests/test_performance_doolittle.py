@@ -37,7 +37,7 @@ def test_doolittle_factorization_parallel_performance(
 @pytest.mark.benchmark(group="doolittle_factorization_parallel")
 @pytest.mark.parametrize("matrix_size", [7000])
 @pytest.mark.parametrize("n_threads", [2, 4, 6, 8, 10, 12, 14, 16])
-def test_doolittle_factorization_parallel_performance(
+def test_doolittle_factorization_parallel_performance_more_threads(
     benchmark, matrix_size, n_threads
 ):
     np.random.seed(42)
