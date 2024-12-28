@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import pytest
 from src.doolittle_factorization import DoolittleFactorization
@@ -32,6 +31,7 @@ def test_doolittle_factorization_parallel_performance(
         return DoolittleFactorization.parallel(A)
 
     benchmark(doolittle_parallel)
+
 
 @pytest.mark.skip(reason="Skipping parallel performance test on CI")
 @pytest.mark.benchmark(group="doolittle_factorization_parallel")
