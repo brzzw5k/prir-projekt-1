@@ -3,7 +3,7 @@ from numba import njit, prange
 
 
 @njit(fastmath=True, cache=True)
-def initialize_lu(A):
+def _initialize_lu(A: np.ndarray) -> tuple[int, np.ndarray, np.ndarray]:
     n = A.shape[0]
     L = np.eye(n, dtype=A.dtype)
     U = np.zeros((n, n), dtype=A.dtype)
@@ -20,7 +20,7 @@ class DoolittleFactorization:
     @staticmethod
     @njit(fastmath=True, cache=True)
     def sequential(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        n, L, U = initialize_lu(A)
+        n, L, U = _initialize_lu(A)
 
         for k in range(n):
             for j in range(k, n):
@@ -39,7 +39,7 @@ class DoolittleFactorization:
     @staticmethod
     @njit(parallel=True, fastmath=True, cache=True)
     def parallel(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        n, L, U = initialize_lu(A)
+        n, L, U = _initialize_lu(A)
 
         for k in range(n):
             for j in range(k, n):
