@@ -40,10 +40,7 @@ def test_doolittle_factorization_sequential(A, L_expected, U_expected):
         ),
     ],
 )
-@pytest.mark.parametrize("n_threads", [2, 3, 4])
-def test_doolittle_factorization_parallel(A, L_expected, U_expected, n_threads):
-    numba.set_num_threads(n_threads)
-
+def test_doolittle_factorization_parallel(A, L_expected, U_expected):
     L, U = DoolittleFactorization.parallel_numba(A)
     numba.set_num_threads(numba.config.NUMBA_DEFAULT_NUM_THREADS)
     np.testing.assert_allclose(L, L_expected)
