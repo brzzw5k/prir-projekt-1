@@ -44,8 +44,27 @@ def test_doolittle_factorization_sequential(A, L_expected, U_expected):
 def test_doolittle_factorization_parallel(A, L_expected, U_expected, n_threads):
     numba.set_num_threads(n_threads)
 
-    L, U = DoolittleFactorization.parallel(A)
+    L, U = DoolittleFactorization.parallel_numba(A)
     numba.set_num_threads(numba.config.NUMBA_DEFAULT_NUM_THREADS)
+    np.testing.assert_allclose(L, L_expected)
+    np.testing.assert_allclose(U, U_expected)
+    assert check_frobenius_norm_lu(A, L, U) == 0
+
+
+@pytest.mark.parametrize(
+    "A, L_expected, U_expected",
+    [
+        (np.array([[2]]), np.array([[1]]), np.array([[2]])),
+        (
+            np.array([[1, 2], [3, 4]]),
+            np.array([[1, 0], [3, 1]]),
+            np.array([[1, 2], [0, -2]]),
+        ),
+    ],
+)
+@pytest.mark.parametrize("n_threads", [2, 3, 4])
+def test_doolittle_factorization_parallel_futures(A, L_expected, U_expected, n_threads):
+    L, U = DoolittleFactorization.parallel_threads(A, n_threads)
     np.testing.assert_allclose(L, L_expected)
     np.testing.assert_allclose(U, U_expected)
     assert check_frobenius_norm_lu(A, L, U) == 0
