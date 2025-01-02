@@ -1,49 +1,84 @@
 import numpy as np
+from numba import njit, prange
+from concurrent.futures import ThreadPoolExecutor
+
+
+@njit(fastmath=True, cache=True)
+def _initialize_lu(A: np.ndarray) -> tuple[int, np.ndarray, np.ndarray]:
+    n = A.shape[0]
+    L = np.eye(n, dtype=A.dtype)
+    U = np.zeros((n, n), dtype=A.dtype)
+    return n, L, U
 
 
 class DoolittleFactorization:
     """
     Doolittle's factorization of a square matrix A into
     a lower triangular matrix L and an upper triangular matrix U
-    such that A = LU.
-
-    Parameters:
-        A: A square matrix of shape (n, n)
-
-    Attributes:
-        A: A square matrix of shape (n, n)
-        n: The size of the square matrix A
-        U: An upper triangular matrix of shape (n, n)
-        L: A lower triangular matrix of shape (n, n)
+    such that A = L*U.
     """
 
-    def __init__(self, A: np.ndarray) -> None:
-        self.A = A
-        self.n = A.shape[0]
-        self.U = np.zeros((self.n, self.n))
-        self.L = np.eye(self.n)
-
-    def _compute_U(self, k: int, j: int) -> None:
-        self.U[k, j] = self.A[k, j]
-        for m in range(k):
-            self.U[k, j] -= self.L[k, m] * self.U[m, j]
-
-    def _compute_L(self, k: int, i: int) -> None:
-        self.L[i, k] = self.A[i, k]
-        for m in range(k):
-            self.L[i, k] -= self.L[i, m] * self.U[m, k]
-        self.L[i, k] /= self.U[k, k]
-
     @staticmethod
+    @njit(fastmath=True, cache=True)
     def sequential(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        df = DoolittleFactorization(A)
-        for k in range(df.n):
-            for j in range(k, df.n):
-                df._compute_U(k, j)
-            for i in range(k + 1, df.n):
-                df._compute_L(k, i)
-        return df.L, df.U
+        n, L, U = _initialize_lu(A)
+
+        for k in range(n):
+            for j in range(k, n):
+                sum_ = 0.0
+                for m in range(k):
+                    sum_ += L[k, m] * U[m, j]
+                U[k, j] = A[k, j] - sum_
+            for i in range(k + 1, n):
+                sum_ = 0.0
+                for m in range(k):
+                    sum_ += L[i, m] * U[m, k]
+                L[i, k] = (A[i, k] - sum_) / U[k, k]
+
+        return L, U
 
     @staticmethod
-    def parallel(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        pass
+    @njit(parallel=True, fastmath=True, cache=True)
+    def parallel_numba(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        n, L, U = _initialize_lu(A)
+
+        for k in range(n):
+            for j in range(k, n):
+                sum_ = 0.0
+                for m in range(k):
+                    sum_ += L[k, m] * U[m, j]
+                U[k, j] = A[k, j] - sum_
+            for i in prange(k + 1, n):
+                sum_ = 0.0
+                for m in range(k):
+                    sum_ += L[i, m] * U[m, k]
+                L[i, k] = (A[i, k] - sum_) / U[k, k]
+
+        return L, U
+
+    @staticmethod
+    def parallel_threads(
+        A: np.ndarray, n_threads: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        n, L, U = _initialize_lu(A)
+
+        def compute_u(k: int):
+            for j in range(k, n):
+                sum_ = 0.0
+                for m in range(k):
+                    sum_ += L[k, m] * U[m, j]
+                U[k, j] = A[k, j] - sum_
+
+        def compute_l(k: int):
+            for i in range(k + 1, n):
+                sum_ = 0.0
+                for m in range(k):
+                    sum_ += L[i, m] * U[m, k]
+                L[i, k] = (A[i, k] - sum_) / U[k, k]
+
+        with ThreadPoolExecutor(max_workers=n_threads) as executor:
+            for k in range(n):
+                executor.submit(compute_u, k)
+                executor.submit(compute_l, k)
+
+        return L, U
