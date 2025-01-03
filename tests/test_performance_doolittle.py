@@ -46,3 +46,15 @@ def test_doolittle_factorization_parallel_threads_performance(
         return DoolittleFactorization.parallel_threads(A, n_threads)
 
     benchmark(doolittle_parallel_threads)
+
+
+@pytest.mark.benchmark(group="doolittle_factorization_pycuda")
+@pytest.mark.parametrize("matrix_size", [70])
+def test_doolittle_factorization_parallel_parallel_pycuda(benchmark, matrix_size):
+    np.random.seed(42)
+    A = np.random.rand(matrix_size, matrix_size).astype(np.float64)
+
+    def doolittle_parallel_pycuda():
+        return DoolittleFactorization.parallel_pycuda(A)
+
+    benchmark(doolittle_parallel_pycuda)

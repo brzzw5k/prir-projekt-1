@@ -1,4 +1,7 @@
 import numpy as np
+import pycuda.driver as drv
+import pycuda.autoinit  # noqa
+from pycuda.compiler import SourceModule
 from numba import njit, prange
 from concurrent.futures import ThreadPoolExecutor
 
@@ -80,5 +83,77 @@ class DoolittleFactorization:
             for k in range(n):
                 executor.submit(compute_u, k)
                 executor.submit(compute_l, k)
+
+        return L, U
+
+    @staticmethod
+    def parallel_pycuda(A: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        n, L, U = _initialize_lu(A)
+
+        mod = SourceModule("""
+        __global__ void compute_u(float *A, float *L, float *U, int n, int k) {
+            int j = blockIdx.x * blockDim.x + threadIdx.x;
+            if (j >= k && j < n) {
+                float sum = 0.0;
+                for (int m = 0; m < k; ++m) {
+                    sum += L[k * n + m] * U[m * n + j];
+                }
+                U[k * n + j] = A[k * n + j] - sum;
+            }
+        }
+
+        __global__ void compute_l(float *A, float *L, float *U, int n, int k) {
+            int i = blockIdx.x * blockDim.x + threadIdx.x;
+            if (i > k && i < n) {
+                float sum = 0.0;
+                for (int m = 0; m < k; ++m) {
+                    sum += L[i * n + m] * U[m * n + k];
+                }
+                L[i * n + k] = (A[i * n + k] - sum) / U[k * n + k];
+            }
+        }
+        """)
+
+        compute_u = mod.get_function("compute_u")
+        compute_l = mod.get_function("compute_l")
+
+        A = A.astype(np.float32)
+        L = L.astype(np.float32)
+        U = U.astype(np.float32)
+
+        A_gpu = drv.mem_alloc(A.nbytes)
+        L_gpu = drv.mem_alloc(L.nbytes)
+        U_gpu = drv.mem_alloc(U.nbytes)
+
+        drv.memcpy_htod(A_gpu, A)
+        drv.memcpy_htod(L_gpu, L)
+        drv.memcpy_htod(U_gpu, U)
+
+        block_size = 256
+        grid_size = (n + block_size - 1) // block_size
+
+        for k in range(n):
+            compute_u(
+                A_gpu,
+                L_gpu,
+                U_gpu,
+                np.int32(n),
+                np.int32(k),
+                block=(block_size, 1, 1),
+                grid=(grid_size, 1),
+            )
+            drv.Context.synchronize()
+            compute_l(
+                A_gpu,
+                L_gpu,
+                U_gpu,
+                np.int32(n),
+                np.int32(k),
+                block=(block_size, 1, 1),
+                grid=(grid_size, 1),
+            )
+
+        drv.memcpy_dtoh(L, L_gpu)
+        drv.memcpy_dtoh(U, U_gpu)
 
         return L, U
