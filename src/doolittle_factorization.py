@@ -91,7 +91,8 @@ class DoolittleFactorization:
         A: np.ndarray, block_size: int = 256
     ) -> tuple[np.ndarray, np.ndarray]:
         n, L, U = _initialize_lu(A)
-
+        
+        # for now that seems to be suboptimal solution, or pytest benchmark might be lying
         mod = SourceModule("""
         __global__ void doolittle(float *A, float *L, float *U, int n) {
             int idx = threadIdx.x + blockIdx.x * blockDim.x;
