@@ -1,4 +1,7 @@
 import numpy as np
+import pycuda.driver as drv
+import pycuda.autoinit  # noqa
+from pycuda.compiler import SourceModule
 from numba import njit, prange
 from concurrent.futures import ThreadPoolExecutor
 
@@ -80,5 +83,68 @@ class DoolittleFactorization:
             for k in range(n):
                 executor.submit(compute_u, k)
                 executor.submit(compute_l, k)
+
+        return L, U
+
+    @staticmethod
+    def parallel_pycuda(
+        A: np.ndarray, block_size: int = 256
+    ) -> tuple[np.ndarray, np.ndarray]:
+        n, L, U = _initialize_lu(A)
+        
+        # for now that seems to be suboptimal solution, or pytest benchmark might be lying
+        mod = SourceModule("""
+        __global__ void doolittle(float *A, float *L, float *U, int n) {
+            int idx = threadIdx.x + blockIdx.x * blockDim.x;
+            if (idx < n) {
+                for (int k = 0; k < n; ++k) {
+                    if (idx >= k && idx < n) {
+                        float sum = 0.0;
+                        for (int m = 0; m < k; ++m) {
+                            sum += L[k * n + m] * U[m * n + idx];
+                        }
+                        U[k * n + idx] = A[k * n + idx] - sum;
+                    }
+                    __syncthreads();
+                    if (idx > k && idx < n) {
+                        float sum = 0.0;
+                        for (int m = 0; m < k; ++m) {
+                            sum += L[idx * n + m] * U[m * n + k];
+                        }
+                        L[idx * n + k] = (A[idx * n + k] - sum) / U[k * n + k];
+                    }
+                    __syncthreads();
+                }
+            }
+        }
+        """)
+
+        doolittle = mod.get_function("doolittle")
+
+        A = A.astype(np.float32)
+        L = L.astype(np.float32)
+        U = U.astype(np.float32)
+
+        A_gpu = drv.mem_alloc(A.nbytes)
+        L_gpu = drv.mem_alloc(L.nbytes)
+        U_gpu = drv.mem_alloc(U.nbytes)
+
+        drv.memcpy_htod(A_gpu, A)
+        drv.memcpy_htod(L_gpu, L)
+        drv.memcpy_htod(U_gpu, U)
+
+        grid_size = (n + block_size - 1) // block_size
+
+        doolittle(
+            A_gpu,
+            L_gpu,
+            U_gpu,
+            np.int32(n),
+            block=(block_size, 1, 1),
+            grid=(grid_size, 1),
+        )
+
+        drv.memcpy_dtoh(L, L_gpu)
+        drv.memcpy_dtoh(U, U_gpu)
 
         return L, U

@@ -1,5 +1,5 @@
 pre-commit
 pytest
 pytest-benchmark
-numpy
 numba
+pycuda
