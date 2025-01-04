@@ -81,12 +81,12 @@ class DoolittleFactorization:
 
         with ThreadPoolExecutor(max_workers=n_threads) as executor:
             for k in range(n):
-                executor.submit(compute_u, k)
-                executor.submit(compute_l, k)
+                executor.submit(compute_u, k).result()
+                executor.submit(compute_l, k).result()  # Wait for compute_l to finish
 
         return L, U
 
-    mod = SourceModule("""
+    cuda_mod = SourceModule("""
     __global__ void compute_u(double *A, double *L, double *U, int n, int k) {
         int j = threadIdx.x + blockIdx.x * blockDim.x;
         if (j >= k && j < n) {
@@ -115,8 +115,8 @@ class DoolittleFactorization:
     }
     """)
 
-    compute_u_cuda = mod.get_function("compute_u")
-    compute_l_cuda = mod.get_function("compute_l")
+    compute_u_cuda = cuda_mod.get_function("compute_u")
+    compute_l_cuda = cuda_mod.get_function("compute_l")
 
     @staticmethod
     def parallel_pycuda(
