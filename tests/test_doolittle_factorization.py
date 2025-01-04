@@ -14,6 +14,11 @@ from tests.helper import check_frobenius_norm_lu
             np.array([[1, 0], [3, 1]]),
             np.array([[1, 2], [0, -2]]),
         ),
+        (
+            np.array([[2, -1, -2], [-4, 6, 3], [-4, -2, 8]]),
+            np.array([[1, 0, 0], [-2, 1, 0], [-2, -1, 1]]),
+            np.array([[2, -1, -2], [0, 4, -1], [0, 0, 3]]),
+        ),
     ],
 )
 def test_doolittle_factorization_sequential(A, L_expected, U_expected):
