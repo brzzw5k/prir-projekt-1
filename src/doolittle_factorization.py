@@ -82,7 +82,7 @@ class DoolittleFactorization:
         with ThreadPoolExecutor(max_workers=n_threads) as executor:
             for k in range(n):
                 executor.submit(compute_u, k).result()
-                executor.submit(compute_l, k).result()  # Wait for compute_l to finish
+                executor.submit(compute_l, k).result()
 
         return L, U
 
