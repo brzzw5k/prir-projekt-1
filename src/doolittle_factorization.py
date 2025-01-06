@@ -1,4 +1,7 @@
 import numpy as np
+import pycuda.driver as cuda
+import pycuda.autoinit  # noqa
+from pycuda.compiler import SourceModule
 from numba import njit, prange
 from concurrent.futures import ThreadPoolExecutor
 
@@ -7,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 def _initialize_lu(A: np.ndarray) -> tuple[int, np.ndarray, np.ndarray]:
     n = A.shape[0]
     L = np.eye(n, dtype=A.dtype)
-    U = np.zeros((n, n), dtype=A.dtype)
+    U = np.zeros_like(A, dtype=A.dtype)
     return n, L, U
 
 
@@ -78,7 +81,90 @@ class DoolittleFactorization:
 
         with ThreadPoolExecutor(max_workers=n_threads) as executor:
             for k in range(n):
-                executor.submit(compute_u, k)
-                executor.submit(compute_l, k)
+                future_u = executor.submit(compute_u, k)
+                future_u.result()
+                future_l = executor.submit(compute_l, k)
+                future_l.result()
 
         return L, U
+
+    cuda_mod = SourceModule("""
+    __global__ void compute_u(double *A, double *L, double *U, int n, int k) {
+        int j = threadIdx.x + blockIdx.x * blockDim.x;
+        
+        __syncthreads();
+
+        if (j >= k && j < n) {
+            double sum = 0.0;
+            for (int m = 0; m < k; m++) {
+                sum += L[k * n + m] * U[m * n + j];
+            }
+            U[k * n + j] = A[k * n + j] - sum;
+        }
+    }
+
+    __global__ void compute_l(double *A, double *L, double *U, int n, int k) {
+        int i = threadIdx.x + blockIdx.x * blockDim.x;
+                            
+        __syncthreads();
+
+        if (i > k && i < n) {
+            double sum = 0.0;
+            for (int m = 0; m < k; m++) {
+                sum += L[i * n + m] * U[m * n + k];
+            }
+            double U_kk = U[k * n + k];
+            if (fabs(U_kk) > 1e-10) {
+                L[i * n + k] = (A[i * n + k] - sum) / U_kk;
+            } else {
+                printf("Error: Division by zero in U[%d][%d]\\n", k, k);
+            }
+        }
+    }
+    """)
+
+    compute_u_cuda = cuda_mod.get_function("compute_u")
+    compute_l_cuda = cuda_mod.get_function("compute_l")
+
+    @staticmethod
+    def parallel_pycuda(
+        A: np.ndarray, block_size: int = 4, grid_size: int = 1
+    ) -> tuple[np.ndarray, np.ndarray]:
+        n, L, U = _initialize_lu(A)
+
+        A_gpu = cuda.mem_alloc(A.nbytes)
+        L_gpu = cuda.mem_alloc(A.nbytes)
+        U_gpu = cuda.mem_alloc(A.nbytes)
+
+        cuda.memcpy_htod(A_gpu, A)
+        cuda.memcpy_htod(L_gpu, L)
+        cuda.memcpy_htod(U_gpu, U)
+        block = (block_size, 1, 1)
+        grid = (grid_size, 1)
+
+        for k in range(n):
+            DoolittleFactorization.compute_u_cuda(
+                A_gpu,
+                L_gpu,
+                U_gpu,
+                np.int32(n),
+                np.int32(k),
+                block=block,
+                grid=grid,
+            )
+            DoolittleFactorization.compute_l_cuda(
+                A_gpu,
+                L_gpu,
+                U_gpu,
+                np.int32(n),
+                np.int32(k),
+                block=block,
+                grid=grid,
+            )
+
+        L_host = np.empty_like(A, dtype=np.float64)
+        U_host = np.empty_like(A, dtype=np.float64)
+        cuda.memcpy_dtoh(L_host, L_gpu)
+        cuda.memcpy_dtoh(U_host, U_gpu)
+
+        return L_host, U_host
