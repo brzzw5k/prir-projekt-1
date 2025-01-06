@@ -81,14 +81,19 @@ class DoolittleFactorization:
 
         with ThreadPoolExecutor(max_workers=n_threads) as executor:
             for k in range(n):
-                executor.submit(compute_u, k).result()
-                executor.submit(compute_l, k).result()
+                future_u = executor.submit(compute_u, k)
+                future_u.result()
+                future_l = executor.submit(compute_l, k)
+                future_l.result()
 
         return L, U
 
     cuda_mod = SourceModule("""
     __global__ void compute_u(double *A, double *L, double *U, int n, int k) {
         int j = threadIdx.x + blockIdx.x * blockDim.x;
+        
+        __syncthreads();
+
         if (j >= k && j < n) {
             double sum = 0.0;
             for (int m = 0; m < k; m++) {
@@ -100,6 +105,9 @@ class DoolittleFactorization:
 
     __global__ void compute_l(double *A, double *L, double *U, int n, int k) {
         int i = threadIdx.x + blockIdx.x * blockDim.x;
+                            
+        __syncthreads();
+
         if (i > k && i < n) {
             double sum = 0.0;
             for (int m = 0; m < k; m++) {
@@ -120,7 +128,7 @@ class DoolittleFactorization:
 
     @staticmethod
     def parallel_pycuda(
-        A: np.ndarray, block_size: int = 256
+        A: np.ndarray, block_size: int = 4, grid_size: int = 1
     ) -> tuple[np.ndarray, np.ndarray]:
         n, L, U = _initialize_lu(A)
 
@@ -131,8 +139,8 @@ class DoolittleFactorization:
         cuda.memcpy_htod(A_gpu, A)
         cuda.memcpy_htod(L_gpu, L)
         cuda.memcpy_htod(U_gpu, U)
-
-        grid_size = (n + block_size - 1) // block_size
+        block = (block_size, 1, 1)
+        grid = (grid_size, 1)
 
         for k in range(n):
             DoolittleFactorization.compute_u_cuda(
@@ -141,8 +149,8 @@ class DoolittleFactorization:
                 U_gpu,
                 np.int32(n),
                 np.int32(k),
-                block=(block_size, 1, 1),
-                grid=(grid_size, 1),
+                block=block,
+                grid=grid,
             )
             DoolittleFactorization.compute_l_cuda(
                 A_gpu,
@@ -150,8 +158,8 @@ class DoolittleFactorization:
                 U_gpu,
                 np.int32(n),
                 np.int32(k),
-                block=(block_size, 1, 1),
-                grid=(grid_size, 1),
+                block=block,
+                grid=grid,
             )
 
         L_host = np.empty_like(A, dtype=np.float64)
