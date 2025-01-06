@@ -67,4 +67,4 @@ def test_doolittle_factorization_parallel_parallel_pycuda(
         return DoolittleFactorization.parallel_pycuda(A, block_size, grid_size)
 
     L, U = benchmark(doolittle_parallel_pycuda)
-#     np.testing.assert_almost_equal(check_frobenius_norm_lu(A, L, U), 0, decimal=7)
+    np.testing.assert_almost_equal(check_frobenius_norm_lu(A, L, U), 0, decimal=7)
